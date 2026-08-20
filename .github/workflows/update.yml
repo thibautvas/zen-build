@@ -1,0 +1,82 @@
+name: update
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update
+  cancel-in-progress: false
+
+env:
+  REPO: zen-browser/desktop
+  CHANNEL: beta
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            access-tokens = github.com=${{ github.token }}
+
+      - name: bump sources.json
+        id: update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          latest=$(curl --fail --silent --show-error --location \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/$REPO/releases/latest" | jq -r '.tag_name')
+
+          if [[ ! $latest =~ ^[0-9]+(\.[0-9]+)*b$ ]]; then
+            echo "::error::latest tag '$latest' is not a $CHANNEL release"
+            exit 1
+          fi
+
+          current=$(jq -r --arg c "$CHANNEL" '.[$c] | to_entries[0].value.version' sources.json)
+
+          if [ "$latest" = "$current" ]; then
+            echo "already on $current"
+            exit 0
+          fi
+
+          echo "bumping $current -> $latest"
+
+          while read -r system; do
+            url=$(jq -r --arg c "$CHANNEL" --arg s "$system" '.[$c][$s].url' sources.json)
+            url="https://github.com/$REPO/releases/download/$latest/${url##*/}"
+
+            hash=$(nix store prefetch-file --json --hash-type sha256 "$url" | jq -r '.hash')
+            echo "  $system  $hash"
+
+            tmp=$(mktemp)
+            jq --arg c "$CHANNEL" --arg s "$system" --arg v "$latest" --arg u "$url" --arg h "$hash" \
+              '.[$c][$s] = { version: $v, url: $u, hash: $h }' sources.json >"$tmp"
+            mv "$tmp" sources.json
+          done < <(jq -r --arg c "$CHANNEL" '.[$c] | keys[]' sources.json)
+
+          echo "version=$latest" >>"$GITHUB_OUTPUT"
+
+      - name: build
+        if: steps.update.outputs.version != ''
+        run: nix build --print-build-logs .#default
+
+      - name: commit
+        if: steps.update.outputs.version != ''
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "zen ${{ steps.update.outputs.version }}" -- sources.json
+          git push
