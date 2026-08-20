@@ -9,75 +9,20 @@ with a proper repo and lockfile.
 - zen-browser does not exist in nixpkgs yet.
 
 
-## System config
+## Example usage
 
-Mine lives here: [zen.nix](https://github.com/thibautvas/nix-config/blob/main/modules/zen.nix).
+- Part of my nix-config: [zen.nix](https://github.com/thibautvas/nix-config/blob/main/modules/zen.nix).
+
+- Standalone flake: [flake.nix](./example/flake.nix).
 
 
-## Standalone usage
+## License
 
-```nix
-{
-  description = "zen browser overrides";
+- Zen Browser itself is [MPL-2.0](https://github.com/zen-browser/desktop/blob/dev/LICENSE)
+and is not redistributed here, [sources.json](./sources.json) only pins upstream release
+URLs, which `fetchurl` retrieves at build time.
 
-  inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+- Full credit for the browser obviously goes to the [Zen Browser team](https://github.com/zen-browser)
+and its contributors, this repo is only a small unofficial Nix packaging layer around their releases.
 
-    zen-build = {
-      url = "github:thibautvas/zen-build";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-  };
-
-  outputs =
-    {
-      self,
-      nixpkgs,
-      zen-build,
-    }:
-    let
-      inherit (nixpkgs) lib;
-
-      defaultSearchEngine = "DuckDuckGo";
-
-      extensions = {
-        "uBlock0@raymondhill.net" = "ublock-origin";
-        "addon@darkreader.org" = "darkreader";
-      };
-
-      prefs = {
-        "browser.shell.checkDefaultBrowser" = false;
-        "zen.welcome-screen.seen" = true;
-      };
-
-      extensionSettings = builtins.mapAttrs (name: value: {
-        install_url = "https://addons.mozilla.org/firefox/downloads/latest/${value}/latest.xpi";
-        installation_mode = "force_installed";
-        default_area = "menupanel";
-        private_browsing = "allow";
-      }) extensions;
-
-      extraPrefs = lib.concatMapAttrsStringSep "\n" (
-        name: value: "lockPref(${builtins.toJSON name}, ${builtins.toJSON value});"
-      ) prefs;
-
-      mkOverride =
-        system:
-        let
-          zen-browser = zen-build.packages.${system}.default;
-        in
-        zen-browser.override {
-          extraPolicies = {
-            ExtensionSettings = extensionSettings;
-            SearchEngines.Default = defaultSearchEngine;
-          };
-          inherit extraPrefs;
-        };
-    in
-    {
-      packages = lib.genAttrs [ "x86_64-linux" "aarch64-darwin" ] (system: {
-        default = mkOverride system;
-      });
-    };
-}
-```
+- The build expressions in this repo are [MIT](./LICENSE) licensed, feel free to reuse any or all of them.
