@@ -37,7 +37,7 @@
         install_url = "https://addons.mozilla.org/firefox/downloads/latest/${value}/latest.xpi";
         installation_mode = "force_installed";
         default_area = "menupanel";
-        private_browsing = "allow";
+        private_browsing = true;
       }) extensions;
 
       extraPrefs = lib.concatMapAttrsStringSep "\n" (
