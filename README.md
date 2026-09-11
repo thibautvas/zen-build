@@ -11,9 +11,59 @@ with a proper repo and lockfile.
 
 ## Example usage
 
-- Part of my nix-config: [zen.nix](https://github.com/thibautvas/nix-config/blob/main/modules/zen.nix).
+- Add zen-build to flake inputs:
 
-- Standalone flake: [flake.nix](./example/flake.nix).
+```nix
+zen-build = {
+  url = "github:thibautvas/zen-build";
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+```
+
+- Override defaults:
+
+```nix
+let
+  zen-browser = zen-build.packages.x86_64-linux.default;
+
+  defaultSearchEngine = "DuckDuckGo";
+
+  extensionSettings = {
+    "uBlock0@raymondhill.net" = {
+      install_url = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi";
+      installation_mode = "force_installed";
+      default_area = "menupanel";
+      private_browsing = true;
+    };
+  };
+
+  extraPrefs = ''
+    lockPref("browser.ctrlTab.sortByRecentlyUsed", true);
+    lockPref("browser.shell.checkDefaultBrowser", false);
+    lockPref("zen.welcome-screen.seen", true);
+  '';
+
+  zen = zen-browser.override {
+    extraPolicies = {
+      ExtensionSettings = extensionSettings;
+      SearchEngines.Default = defaultSearchEngine;
+    };
+    inherit extraPrefs;
+  };
+
+in
+{
+  environment.systemPackages = [ zen ]; # add to system packages
+  # home.packages = [ zen ]; # add to home-manager packages
+  # packages.x86_64-linux.default = zen; # expose package
+}
+```
+
+- System config example:
+[zen.nix](https://github.com/thibautvas/nix-config/blob/0591122521d81706fd3501ed334040cd4e373846/modules/zen.nix)
+
+- Standalone flake example:
+[flake.nix](./example/flake.nix)
 
 
 ## License
